@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>City Temperature Check</title>
+    <style>
+        /* Keep the same CSS styles from previous version */
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }
+        .container { background-color: #f5f5f5; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        select, input, button { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background-color: #4CAF50; color: white; cursor: pointer; }
+        button:hover { background-color: #45a049; }
+        #result { margin-top: 20px; padding: 15px; border-radius: 4px; }
+        .error { background-color: #ffebee; color: #b71c1c; }
+        .success { background-color: #e8f5e9; color: #2e7d32; }
+        .temp-container { display: flex; gap: 20px; margin-top: 10px; }
+        .temp-item { text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Check City Temperature</h2>
+        <div class="form-group">
+            <select id="citySelect">
+                <option value="Elobour">Al Obour</option>
+                <option value="October">Madīnat Sittah Uktūbar</option>
+            </select>
+            <input type="date" id="dateInput">
+            <button onclick="getTemperature()">Get Temperature</button>
+        </div>
+        <div id="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        document.getElementById('dateInput').value = new Date().toISOString().split('T')[0];
+
+        const cities = {
+            Elobour: { 
+                name: 'Al Obour',
+                coords: { lat: 30.1933, lon: 31.4603 }
+            },
+            October: {
+                name: 'Madīnat Sittah Uktūbar',
+                coords: { lat: 29.9361, lon: 30.9269 }
+            }
+        };
+
+        async function getTemperature() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'none';
+            
+            const cityKey = document.getElementById('citySelect').value;
+            const date = document.getElementById('dateInput').value;
+            const city = cities[cityKey];
+            const selectedDate = new Date(date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            try {
+                let apiUrl, maxTemp, minTemp, dataSource;
+                
+                if (selectedDate < today) {
+                    // Historical Data API
+                    apiUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${city.coords.lat}&longitude=${city.coords.lon}&start_date=${date}&end_date=${date}&hourly=temperature_2m&timeformat=unixtime`;
+                    
+                    const response = await fetch(apiUrl);
+                    const data = await response.json();
+                    
+                    if (data.error) throw new Error(data.reason);
+                    if (!data.hourly.temperature_2m.length) throw new Error('No historical data available');
+                    
+                    const temps = data.hourly.temperature_2m;
+                    maxTemp = Math.max(...temps).toFixed(1);
+                    minTemp = Math.min(...temps).toFixed(1);
+                    dataSource = 'Historical Data';
+                } else {
+                    // Forecast API
+                    apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${city.coords.lat}&longitude=${city.coords.lon}&daily=temperature_2m_max,temperature_2m_min&start_date=${date}&end_date=${date}&timezone=auto`;
+                    
+                    const response = await fetch(apiUrl);
+                    const data = await response.json();
+                    
+                    if (data.error) throw new Error(data.reason);
+                    maxTemp = data.daily.temperature_2m_max[0].toFixed(1);
+                    minTemp = data.daily.temperature_2m_min[0].toFixed(1);
+                    dataSource = selectedDate.getTime() === today.getTime() ? 'Current Day Data' : 'Forecast Data';
+                }
+
+                resultDiv.className = 'success';
+                resultDiv.innerHTML = `
+                    <h3>${city.name} Temperature</h3>
+                    <p>Date: ${date}</p>
+                    <div class="temp-container">
+                        <div class="temp-item">
+                            <strong>Maximum</strong><br>
+                            ${maxTemp} °C
+                        </div>
+                        <div class="temp-item">
+                            <strong>Minimum</strong><br>
+                            ${minTemp} °C
+                        </div>
+                    </div>
+                    <p style="margin-top: 15px;"><em>${dataSource}</em></p>
+                `;
+                resultDiv.style.display = 'block';
+
+            } catch (error) {
+                resultDiv.className = 'error';
+                resultDiv.innerHTML = `Error: ${error.message}`;
+                resultDiv.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>
